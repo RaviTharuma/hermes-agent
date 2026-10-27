@@ -2029,13 +2029,24 @@ def _warn_explicit_disable_beats_env(platform: Platform) -> None:
     names = _ENV_ENABLE_CREDENTIALS.get(platform) or ()
     present = [n for n in names if (os.environ.get(n) or "").strip()]
     creds = ", ".join(present or names) or "its credentials"
+    try:
+        from hermes_cli.profiles import get_active_profile_name
+
+        profile_name = get_active_profile_name() or "default"
+    except Exception:
+        profile_name = "default"
+    profile_scope = (
+        f" in profile '{profile_name}' (for this profile only)"
+        if profile_name != "default"
+        else " in the default profile"
+    )
     logger.warning(
-        "Platform '%s' is explicitly disabled by platforms.%s.enabled: false in "
+        "Platform '%s' is explicitly disabled%s by platforms.%s.enabled: false in "
         "config.yaml, so the credentials found in the environment (%s) will NOT "
         "start its adapter. Environment credentials no longer override an "
         "explicit disable. Remove the key or set platforms.%s.enabled: true to "
         "turn it back on.",
-        platform.value, platform.value, creds, platform.value,
+        platform.value, profile_scope, platform.value, creds, platform.value,
     )
 
 

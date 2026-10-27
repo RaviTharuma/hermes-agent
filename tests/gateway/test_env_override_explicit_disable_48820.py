@@ -197,3 +197,23 @@ def test_every_env_enable_branch_is_named_for_the_warning():
     routed.add(Platform.SLACK)  # Slack has its own inline copy of the logic
     missing = {p.value for p in routed} - {p.value for p in gateway_config._ENV_ENABLE_CREDENTIALS}
     assert not missing, f"platforms without a credential entry for the explicit-disable warning: {missing}"
+
+
+@pytest.mark.usefixtures("_fresh_warn_dedup")
+def test_explicit_disable_warning_names_profile_scope(tmp_path, monkeypatch, caplog):
+    """A multiplex profile warning must not read like the connected primary is disabled."""
+    root = _isolate(monkeypatch, tmp_path, CRED_ENV["telegram"])
+    profile_home = root / "profiles" / "research"
+    profile_home.mkdir(parents=True)
+    monkeypatch.setenv("HERMES_HOME", str(profile_home))
+    (profile_home / "config.yaml").write_text(
+        "platforms:\n  telegram:\n    enabled: false\n", encoding="utf-8"
+    )
+
+    with caplog.at_level(logging.WARNING, logger="gateway.config"):
+        load_gateway_config()
+
+    message = next(r.getMessage() for r in caplog.records if "explicitly disabled" in r.getMessage())
+    assert "profile 'research'" in message
+    assert "for this profile only" in message
+    assert str(profile_home) not in message

@@ -29,6 +29,12 @@ def notify(message: str) -> bool:
 
 
 def watchdog_interval_seconds() -> float | None:
+    """Return systemd's watchdog period for this process.
+
+    ``WATCHDOG_PID`` names the unit's main process, which can legitimately be a launcher wrapper.
+    ``NotifyAccess=all`` authorizes the gateway child to feed the same unit watchdog, so a strict
+    self-PID check would disable the heartbeat in exactly that supported topology.
+    """
     try:
         interval = float(os.environ.get("WATCHDOG_USEC", "") if _notify_socket() else "") / 1e6
     except (TypeError, ValueError):
@@ -72,7 +78,12 @@ class SystemdWatchdog:
 
     def ready(self, status: str = "Gateway running") -> bool:
         safe_status = str(status or "Gateway running").replace("\n", " ")
-        return self.enabled and notify(f"READY=1\nSTATUS={safe_status}")
+        # The generated unit initially permits child notifications because a credential wrapper
+        # may remain as ExecStart's MainPID. Atomically hand ownership to this gateway, then narrow
+        # notification access back to the main process before declaring readiness.
+        return self.enabled and notify(
+            f"MAINPID={os.getpid()}\nNOTIFYACCESS=main\nREADY=1\nSTATUS={safe_status}"
+        )
 
     def record_tick(self, *, scheduled_at: float, now: float) -> bool:
         """Feed systemd only when the event loop woke within its lag budget."""

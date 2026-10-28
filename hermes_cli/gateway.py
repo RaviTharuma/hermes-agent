@@ -3247,10 +3247,10 @@ def generate_systemd_unit(system: bool = False, run_as_user: str | None = None) 
         env_lines = _ld_library_path_line(system=False)
         wanted_by = "default.target"
 
+    from hermes_cli.gateway_systemd_unit import watchdog_directives
+
     watchdog_seconds = _systemd_watchdog_seconds(hermes_home)
-    systemd_type, systemd_watchdog_directives = "simple", ""
-    if watchdog_seconds > 0:
-        systemd_type, systemd_watchdog_directives = "notify", f"NotifyAccess=main\nWatchdogSec={watchdog_seconds}s\n"
+    systemd_type, systemd_watchdog_directives = watchdog_directives(watchdog_seconds)
     path_entries.extend(_build_user_local_paths(user_home, path_entries))
     path_entries.extend(_build_wsl_interop_paths(path_entries))
     path_entries.extend(["/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin", "/sbin", "/bin"])

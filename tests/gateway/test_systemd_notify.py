@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import socket
 
 import pytest
@@ -55,6 +56,17 @@ def test_notify_uses_nonblocking_datagram_send(monkeypatch):
     assert calls[0] == ("setblocking", False)
 
 
+def test_watchdog_allows_mainpid_wrapper(monkeypatch):
+    monkeypatch.setenv("NOTIFY_SOCKET", "/tmp/hermes-test-notify")
+    monkeypatch.setenv("WATCHDOG_USEC", "20000000")
+    monkeypatch.setenv("WATCHDOG_PID", str(os.getpid() + 1))
+
+    import gateway.systemd_notify as notify_mod
+
+    assert notify_mod.watchdog_interval_seconds() == 20.0
+    assert notify_mod.SystemdWatchdog().enabled is True
+
+
 @pytest.mark.asyncio
 async def test_watchdog_sends_ready_heartbeat_and_stopping(monkeypatch):
     calls: list[str] = []
@@ -73,9 +85,9 @@ async def test_watchdog_sends_ready_heartbeat_and_stopping(monkeypatch):
     await asyncio.sleep(0.04)
     await watchdog.stop()
 
-    assert any(message.startswith("READY=1") for message in calls)
+    ready = next(message for message in calls if "READY=1" in message)
+    assert ready.startswith(f"MAINPID={os.getpid()}\nNOTIFYACCESS=main\nREADY=1")
     assert "WATCHDOG=1" in calls
     assert calls[-1] == "STOPPING=1"
     assert watchdog.unhealthy is False
-
 
